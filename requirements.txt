@@ -1,0 +1,5 @@
+#exact==2.2.1 -- does not work on mac
+maturin # for install pumpkin from source
+natsort
+tqdm
+

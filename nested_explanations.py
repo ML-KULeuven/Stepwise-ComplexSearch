@@ -195,7 +195,14 @@ def more_than_one_constraint(step):
     return len(step['constraints']) > 1
 
 def get_nested_explanation_sequence(input_lits, constraints, output_lits,
-                                    depth=0, do_nested = more_than_one_constraint, **kwargs):
+                                    depth=0, do_nested = more_than_one_constraint,
+                                    **kwargs):
+    """
+    Compute a nested explanation sequence for the given input literals, constraints, and output literals.
+    First computes a stepwise explanation sequence, and then checks for each step whether it needs to be nested,
+    based on the `do_nested` function.
+    If the step needs to be nested, the function is called recursively to compute a nested explanation for the step.
+    """
 
     print("Computing explanation sequence at depth", depth)
     sequence, cpm_proof = get_nested_explanation_with_proof(input_lits, constraints, output_lits, **kwargs)

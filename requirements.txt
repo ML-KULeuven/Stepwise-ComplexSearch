@@ -1,4 +1,4 @@
-#exact==2.2.1 -- does not work on mac
+exact==2.2.1 # does not work on mac, install from source instead
 maturin # for install pumpkin from source
 natsort
 tqdm

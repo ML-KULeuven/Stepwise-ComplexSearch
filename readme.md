@@ -36,9 +36,9 @@ make install
 
 `make install` does the following:
 
-1. Installs Python dependencies from `requirements.txt` (`maturin`, `natsort`, `tqdm`)
-2. Installs a pinned [CPMpy](https://github.com/CPMpy/cpmpy) commit
-3. Checks out Pumpkin v0.3.0 in the `pumpkin/` submodule, applies `patches/disable_fixpoint_prop.patch`, and builds the `pumpkin-solver` Python package
+1. Installs Python dependencies from `requirements.txt`
+2. Installs a pinned [CPMpy](https://github.com/CPMpy/cpmpy) commit (13dec1a)
+3. Builds the `pumpkin-solver` Python package from the `pumpkin/` submodule (skipped if already installed)
 
 If you already cloned without submodules:
 
@@ -60,26 +60,18 @@ make reinstall-pumpkin
 
 ```
 Stepwise-ComplexSearch/
-├── readme.md
-├── requirements.txt
-├── Makefile                      # Install Python deps and build Pumpkin
 ├── example.py                    # Minimal job-shop example
+├── experiments.py                # Run benchmark experiments and download PSPLib data
 ├── nested_explanations.py        # Nested explanation algorithm (main entry point)
 ├── utils.py                      # Domain shrinking and lexicographic MUS helpers
-├── proof.drcp                    # Example DRCP proof log
 ├── benchmarks/                   # Benchmark instances
-├── patches/
-│   └── disable_fixpoint_prop.patch   # Patch applied to Pumpkin for proof generation
-├── proof2seq/                    # Proof-to-sequence pipeline (from AAAI'25 Proof2Seq)
+├── proof2seq/                    # Proof-to-sequence pipeline (from AAAI'25 [Proof2Seq](https://ojs.aaai.org/index.php/AAAI/article/view/38432/42394))
 │   ├── parsing.py                # DRCP proof parser for Pumpkin proofs
 │   ├── pipeline.py               # End-to-end proof → explanation sequence pipeline
 │   ├── simplify.py               # Proof simplification
-│   ├── minimize.py               # Proof trimming and reason minimization
+│   ├── minimize.py               # Proof trimming and minimization
 │   ├── mus.py                    # MUS algorithms (deletion-based, SMUS)
-│   ├── mus_enum.py               # MUS enumeration utilities
 │   └── utils.py                  # Proof/sequence printing and statistics
-└── pumpkin/                      # Git submodule: [Pumpkin](https://github.com/ConSol-Lab/Pumpkin) CP solver
-    └── pumpkin-solver-py/        # Python bindings (built via maturin)
 ```
 
 **Workflow.** A CPMpy model is solved with Pumpkin to obtain a DRCP proof (`proof2seq/pipeline.py`). The proof is parsed, simplified, and converted into a flat explanation sequence (`proof2seq/`). Steps that use more than one user-level constraint are then recursively explained via `nested_explanations.py`, producing a nested explanation sequence.
@@ -103,16 +95,32 @@ model = cp.Model(...)  # must be UNSAT
 sequence, proof = find_explanation_sequence(model)
 ```
 
-Key optional arguments (passed through to the underlying pipeline):
+## Benchmark experiments
 
-| Argument | Default | Description |
+Paper benchmark results can be reproduced with the Makefile targets below. Each target runs `experiments.py` on every instance in the corresponding dataset and writes JSON statistics to `results/<benchmark>/`.
+
+| Target | Dataset | Output directory |
 |---|---|---|
-| `time_limit` | `3600` | Solver time limit (seconds) per explanation subproblem |
-| `mus_solver` | `"exact"` | Backend for MUS computation |
-| `mus_algo` | `"deletion"` | MUS algorithm (`"deletion"` or `"smus"`) |
-| `proof_name` | `"proof.drcp"` | Path for the intermediate DRCP proof file |
-| `seed` | `0` | Random seed for the solver |
+| `make nurserostering` | Nurse rostering instances in `benchmarks/nr_musses/`, based of [schedulingbenchmarks.org](https://www.schedulingbenchmarks.org) | `results/nurserostering/` |
+| `make rcpsp` | RCPSP instances from [PSPLib](https://www.om-db.wi.tum.de/psplib/) (j30, j60, j90, j120) | `results/rcpsp/` |
 
+```bash
+make nurserostering
+make rcpsp
+```
+
+`make rcpsp` first downloads any missing PSPLib families via `experiments.py --download-psplib`. You can also download the RCPSP data separately:
+
+```bash
+python experiments.py --download-psplib
+```
+
+To run a single instance:
+
+```bash
+python experiments.py --model benchmarks/nr_musses/instance_1_1.pickle
+python experiments.py --family j30 --instance j301_1
+```
 
 ## Citation
 

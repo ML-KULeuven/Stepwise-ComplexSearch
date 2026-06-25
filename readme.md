@@ -120,21 +120,12 @@ If you use this code, please cite:
 
 ```bibtex
 @inproceedings{bleukx2026towards,
-    author    = {Ignace Bleukx and Peter J. Stuckey and Tias Guns},
-    title     = {Towards Step-wise explanations of Complex Search Trees},
-    booktitle = {Proceedings of the 32nd International Conference on Principles and Practice of Constraint Programming (CP)},
-    year      = {2026},
-    note      = {to appear}
-}
-```
-
-The proof-to-sequence pipeline in `proof2seq/` is based on:
-
-```bibtex
-@inproceedings{bleukx2026certifying,
-    author    = {Ignace Bleukx and Maarten Flippo and Emir Demirovi{\'c} and Bart Bogaerts and Tias Guns},
-    title     = {Using Certifying Constraint Solvers for Generating Step-wise Explanations},
-    booktitle = {Proceedings of the 40th {AAAI} Conference on Artificial Intelligence},
-    year      = {2026}
+  author    = {Ignace Bleukx and Peter J. Stuckey and Tias Guns},
+  title     = {Towards Step-wise explanations of Complex Search Trees},
+  booktitle    = {{CP}},
+  series       = {LIPIcs},
+  publisher    = {Schloss Dagstuhl - Leibniz-Zentrum f{\"{u}}r Informatik},
+  year         = {2026}
+  note         = {to appear}
 }
 ```

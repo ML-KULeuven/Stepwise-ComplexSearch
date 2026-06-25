@@ -1,0 +1,20 @@
+diff --git a/pumpkin-crates/core/src/engine/constraint_satisfaction_solver.rs b/pumpkin-crates/core/src/engine/constraint_satisfaction_solver.rs
+index 08b3d031..d9fe7a8b 100644
+--- a/pumpkin-crates/core/src/engine/constraint_satisfaction_solver.rs
++++ b/pumpkin-crates/core/src/engine/constraint_satisfaction_solver.rs
+@@ -857,11 +857,11 @@ impl ConstraintSatisfactionSolver {
+         }
+ 
+         let handle = self.state.add_propagator(constructor);
+-        let result = self.state.propagate_to_fixed_point();
++        //let result = self.state.propagate_to_fixed_point();
+ 
+-        if let Err(conflict) = result {
+-            self.solver_state.declare_conflict(conflict.into());
+-        }
++        //if let Err(conflict) = result {
++        //    self.solver_state.declare_conflict(conflict.into());
++        //}
+ 
+         if self.solver_state.no_conflict() {
+             Ok(handle)

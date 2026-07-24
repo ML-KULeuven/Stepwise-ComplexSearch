@@ -8,8 +8,9 @@ from cpmpy.expressions.utils import is_num
 
 from cpmpy.transformations.get_variables import get_variables as cpm_get_variables
 from cpmpy.transformations.negation import push_down_negation
-from cpmpy.expressions.utils import flatlist
-from natsort import natsorted
+from cpmpy.transformations.normalize import toplevel_list
+
+from itertools import groupby
 
 
 def to_list_recursive(lst):
@@ -17,12 +18,14 @@ def to_list_recursive(lst):
         return [to_list_recursive(v) for v in lst]
     return lst
 
+
 def get_variables(constraints):
     """
     Helper function to get variables in collection of constraints
     Accepts any (nested) iterator as input
     """
     return cpm_get_variables(to_list_recursive(constraints))
+
 
 def normalize(lst_of_exprs):
     """
@@ -52,112 +55,80 @@ def normalize(lst_of_exprs):
                 newlst.append(lhs <= rhs - 1)
             elif cpm_expr.name == ">":
                 newlst.append(lhs >= rhs + 1)
-            else:  # other comparisons are fine
+            else:
                 newlst.append(cpm_expr)
         else:
             raise ValueError(f"Unexpected expression: {cpm_expr}")
 
-    return sorted(newlst, key=str)  # , key=lambda x : x.args[0].name)
-
-def get_cpm_reasons(step, proof):
-
-    if isinstance(proof, list):
-        proof = {step['id'] for step in proof}
-
-    cpm_reasons = []
-    for used in step['reasons']:
-        if isinstance(used, int): # it's a step id
-            cpm_reasons.append(proof[used]['derived'])
-        else:
-            assert isinstance(used, Expression), f"Expected int or expression but got {used}"
-            cpm_reasons.append(used)
-    return cpm_reasons
-
-def sanity_check_proof(proof):
-
-    proof_dict = {step['id'] : step for step in proof}
-    for step in proof:
-        # check all used steps have a smaller id
-        for r in step['reasons']:
-            if isinstance(r, int) and r >= step['id']:
-                raise ValueError(f"Proof step {step} uses steps that occur later in the proof!\n{step['reasons']}")
-
-        if len(set(step['reasons'])) != len(step['reasons']):
-            raise ValueError(f"Duplicate reason in step {step}")
-
-        # check output is logically implied by input
-        cpm_reasons = get_cpm_reasons(step, proof_dict)
-        cpm_derived = step['derived']
-
-        for cons in cpm_derived:
-            if not isinstance(cons, Expression):
-                raise ValueError(f"Expected expression, got {cons} in proof step {step}")
+    return sorted(newlst, key=str)
 
 
-        unsat_model = cp.Model(cpm_reasons + [~cp.all(cpm_derived)])
-        if unsat_model.solve() is not False:
-            print(step)
-            raise ValueError(f"Error in proof step with id {step['id']}!\n"
-                             f"Reasons do not logically imply derived constraint!\n"
-                             f"Reasons:\n\t" +'\n\t'.join(map(str,cpm_reasons)) +"\n"
-                             f"Derived: {cpm_derived}")
+def sanity_check_nogoods(nogoods, constraints=None):
+    """
+    Sanity-check a list of nogood expressions.
+    Each nogood must be a CPMpy Expression, and together with the model
+    constraints they should be unsatisfiable.
+    """
+    for i, ng in enumerate(nogoods):
+        if not isinstance(ng, Expression):
+            raise ValueError(f"Expected Expression at index {i}, got {type(ng)}: {ng}")
+
+    if constraints is not None and len(nogoods) > 0:
+        if cp.Model(list(constraints) + list(nogoods)).solve() is not False:
+            raise ValueError("constraints + nogoods are satisfiable; expected an UNSAT proof")
+
 
 def sanity_check_sequence(seq):
-
     current_lits = []
     for step in seq:
-
         assert set(step['input_lits']) <= frozenset(current_lits)
         assert cp.Model(step['input_lits'] + step['constraints'] + [~cp.all(step['output_lits'])]).solve() is False
         current_lits = list(set(current_lits) | set(step['output_lits']))
 
 
 def get_proof_statistics(proof):
-    n_reasons = [len(step['reasons']) for step in proof]
-    n_cons = [sum(isinstance(r,Expression) for r in step['reasons']) for step in proof]
+    if len(proof) == 0:
+        return dict(length=0, avg_vars=0, std_vars=0, max_vars=0)
+
+    n_vars = [len(get_variables(ng)) for ng in proof]
     return dict(
-        length = len(proof),
-        avg_reasons = sum(n_reasons) / len(n_reasons),
-        std_reasons = np.std(n_reasons),
-        max_reasons = max(n_reasons),
-        max_cons = max(n_cons),
-        avg_cons = sum(n_cons) / len(proof)
+        length=len(proof),
+        avg_vars=sum(n_vars) / len(n_vars),
+        std_vars=np.std(n_vars),
+        max_vars=max(n_vars),
     )
 
-def print_proof_statistics(proof, name="Proof", precision=2):
 
+def print_proof_statistics(proof, name="Proof", precision=2):
     print(f"Statistics for {name}:")
     stats = get_proof_statistics(proof)
     print("#steps:", stats['length'], end="\t")
-    print("avg #reasons:", round(stats['avg_reasons'],precision), end="\t")
-    print("std #reasons:", round(stats['std_reasons'], precision), end="\t")
-    print("max #reasons:", stats['max_reasons'], end="\t")
-    print("max #constraints:", stats['max_cons'], end="\t")
-    print("avg #constraints:", round(stats['avg_cons'],precision), end="\t")
+    print("avg #vars:", round(stats['avg_vars'], precision), end="\t")
+    print("std #vars:", round(stats['std_vars'], precision), end="\t")
+    print("max #vars:", stats['max_vars'], end="\t")
     print("\n")
 
-def get_sequence_statistics(sequence):
 
+def get_sequence_statistics(sequence):
     n_cons = [len(step['constraints']) for step in sequence]
     return dict(
-        length = len(sequence),
-        avg_cons = sum(n_cons) / len(sequence),
-        std_cons = np.std(n_cons),
-        max_cons = max(n_cons)
+        length=len(sequence),
+        avg_cons=sum(n_cons) / len(sequence),
+        std_cons=np.std(n_cons),
+        max_cons=max(n_cons),
     )
 
-def print_sequence_statistics(sequence, precision=2):
 
+def print_sequence_statistics(sequence, precision=2):
     print("Statistics for explanation sequence:")
     stats = get_sequence_statistics(sequence)
     print("#steps:", stats['length'], end="\t")
-    print("avg #constraints:", round(stats['avg_cons'],precision), end="\t")
+    print("avg #constraints:", round(stats['avg_cons'], precision), end="\t")
     print("std #constraints:", round(stats['std_cons'], precision), end="\t")
     print("max #constraints:", stats['max_cons'], end="\t")
     print("\n")
 
 
-from cpmpy.transformations.normalize import toplevel_list
 def get_domains_from_literals(literals):
     domains = dict()
     for lit in push_down_negation(toplevel_list(literals)):
@@ -194,8 +165,6 @@ def get_domains_from_literals(literals):
     return domains
 
 
-from itertools import groupby
-
 def split_to_nonconsequetive(lst, key=None):
     parts = []
     for _, g in groupby(enumerate(sorted(lst, key=key)), lambda x: x[0] - x[1]):
@@ -203,15 +172,14 @@ def split_to_nonconsequetive(lst, key=None):
         parts.append(sublst)
     return parts
 
-def literals_from_domains(domains):
 
+def literals_from_domains(domains):
     new_literals = []
     for var, dom in domains.items():
         if len(dom) == 1:
             new_literals.append(var == next(iter(dom)))
             continue
         elif len(dom) == 0:
-            # return sorted([lit for lit in literals if var in set(get_variables(lit))], key=str)
             return [cp.BoolVal(False)]
 
         regions = split_to_nonconsequetive(dom)
@@ -227,14 +195,14 @@ def literals_from_domains(domains):
                 else:
                     parts.append((var >= min(vals)) & (var <= max(vals)))
         if len(parts) == 1 and isinstance(parts[0], Operator) and parts[0].name == "and":
-            new_literals += parts[0].args # don't make it into an "AND" constraint
+            new_literals += parts[0].args
         else:
             new_literals.append(cp.any(parts))
 
     return toplevel_list(new_literals)
 
-def minimize_literals(literals):
 
+def minimize_literals(literals):
     if cp.BoolVal(False) in set(literals):
         return [cp.BoolVal(False)]
 
@@ -242,31 +210,25 @@ def minimize_literals(literals):
     return literals_from_domains(domains)
 
 
+def step_label(prefix="", index=1):
+    return f"{prefix}.{index}" if prefix else str(index)
+
+
+def format_step_label(label):
+    return f"Step {label}"
+
+
 def pretty_print_proof(proof, indent=0):
-    proof_dict = {step['id']: step for step in proof}
+    for i, ng in enumerate(proof):
+        label = format_step_label(i + 1)
+        line = f"    {ng}"
+        width = max(len(line), len(label) + 1)
+        print("    " * indent, label, "-" * (width - len(label)), sep="")
+        print("    " * indent, "|", line, " " * (width - len(line) + 1), "|", sep="")
+        print("    " * indent + "-" * (width + 3))
 
-    for i, step in enumerate(proof):
-        lines = []
-        other_steps = [i for i in step['reasons'] if isinstance(i, int)]
-        cons = [c for c in step['reasons'] if isinstance(c, Expression)]
-        assert len(other_steps)+len(cons) == len(step['reasons'])
-        lines += ["    Reasons"]
-        lines += ["        " + str(proof_dict[i]['derived']) for i in other_steps]
-        lines += ["        " + str(c) for c in cons]
 
-        if hasattr(step, "filtering_algorithm"):
-            lines += [f"    Derived using {step['filtering_algorithm']}:"]
-        else:
-            lines += [f"    Derived:"]
-        lines += ["        "+str(step['derived'])]
-
-        width = max(len(l) for l in lines)
-        print("--",i+1,"-"*(width+1-len(str(i+1))), sep="")
-        for line in lines:
-            print("    "*indent,"|", line," "*(width-len(line)+1),"|", sep="")
-        print("-"*(width+3))
-
-def print_explanation_step(step, index=1, indent=0, format="domain", **kwargs):
+def print_explanation_step(step, label="1", indent=0, format="domain", **kwargs):
     lines = []
     if format == "literals":
         lines += ["    Input literals:"]
@@ -296,21 +258,19 @@ def print_explanation_step(step, index=1, indent=0, format="domain", **kwargs):
     elif format == "minliterals":
         lines += ["        " + ",".join(map(str, minimize_literals(step['output_lits'])))]
 
+    step_tag = format_step_label(label)
     width = max(len(l) for l in lines)
-    print("    " * indent, "--", index, "-" * (width + 1 - len(str(index + 1))), sep="", **kwargs)
+    width = max(width, len(step_tag) + 1)
+    print("    " * indent, step_tag, "-" * (width - len(step_tag)), sep="", **kwargs)
     for line in lines:
-        print("    " * indent, "|", line, " " * (width - len(line) + 1), "|", sep="",  **kwargs)
-    print("    " * indent+"-" * (width + 3), **kwargs)
+        print("    " * indent, "|", line, " " * (width - len(line) + 1), "|", sep="", **kwargs)
+    print("    " * indent + "-" * (width + 3), **kwargs)
 
 
-def pretty_print_sequence(sequence, indent=0, format="literals", start_at=1, **kwargs):
-
-    i = start_at
-    for step in sequence:
-        print_explanation_step(step, i, indent, format=format, **kwargs)
-        i += 1
-
-
-
-
-
+def pretty_print_sequence(sequence, indent=0, format="literals", prefix="", start_at=1, **kwargs):
+    for i, step in enumerate(sequence, start=start_at):
+        label = step_label(prefix, i)
+        print_explanation_step(step, label, indent, format=format, **kwargs)
+        nested = step.get("nested_explanation")
+        if nested:
+            pretty_print_sequence(nested, indent=indent + 1, format=format, prefix=label, **kwargs)

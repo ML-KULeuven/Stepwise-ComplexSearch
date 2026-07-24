@@ -6,11 +6,20 @@ install: install-requirements install-pumpkin
 
 install-requirements:
 	pip install -r requirements.txt
-	pip install git+https://github.com/CPMpy/cpmpy.git@13dec1a6fe7066f3b7af991239d3142ab137a48c
 
 install-pumpkin:
 	@if pip show pumpkin-solver >/dev/null 2>&1; then \
-		echo "pumpkin-solver is already installed, skipping (use 'make reinstall-pumpkin' to force)"; \
+		ENV_NAME="$${CONDA_DEFAULT_ENV:-}"; \
+		if [ -z "$$ENV_NAME" ] && [ -n "$$VIRTUAL_ENV" ]; then \
+			ENV_NAME="$$(basename "$$VIRTUAL_ENV")"; \
+		fi; \
+		ENV_NAME="$${ENV_NAME:-unknown}"; \
+		printf "pumpkin-solver is already installed in env '%s'. Force-reinstall? [y/N] " "$$ENV_NAME"; \
+		read ans </dev/tty; \
+		case "$$ans" in \
+			[yY]|[yY][eE][sS]) $(MAKE) reinstall-pumpkin ;; \
+			*) echo "Skipping pumpkin install." ;; \
+		esac; \
 	else \
 		$(MAKE) reinstall-pumpkin; \
 	fi
